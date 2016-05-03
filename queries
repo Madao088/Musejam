@@ -1,0 +1,99 @@
+The query below returns similar events ,in random order, to that of the event currently being browsed on the basis of similarity of social_causes.The joins return the user who created the events,city,and the image of the event.
+
+ DB::select('SELECT e.*,u.name as user, u.user_id,c.name as city , f.file_name , f.url as file_url,sc.cause_name as cause  FROM `events` as e
+              left join users  as u on e.user_id=u.user_id
+              left join cities as c on c.city_id=e.city_id
+              left join social_causes as sc on sc.cause_id=e.cause_id
+              left join files as f  on e.file_id=f.file_id
+              where e.cause_id= :cause_id and event_id NOT in (:event_id)
+            ORDER BY RAND() limit 0,4',array('event_id'=>$result[0]->event_id,'cause_id'=>$result[0]->cause_id ));
+
+
+==========================================================================================================================================================================================================
+The query below returns the the search result  based on tags(the result can be either  a story or event or fundraiser)
+
+$res=DB::select(" select s.title as name,e.entity from tags as t
+                inner join stories as s
+                on t.entity_id=s.story_id
+                left join entity_types as e
+                on e.id=t.type_id
+				where t.type_id=3 and t.name=:name1
+                union
+                select ev.name,e.entity
+                from tags as t
+                inner join events as ev
+                on t.entity_id=ev.event_id
+                left join entity_types as e
+                on e.id=t.type_id
+				where t.type_id=1 and t.name=:name2
+                union
+                select f.name,e.entity
+                from tags as t
+                inner join fundraisers as f
+                on t.entity_id=f.fundraiser_id
+                left join entity_types as e
+                on e.id=t.type_id
+				where t.type_id=2 and t.name=:name3",array("name1"=>$request->tag,"name2"=>$request->tag,"name3"=>$request->tag));
+    $this->setStatusCode(200);
+    return $this->respondWithSuccess("Data obtained succesfully",$res);
+
+
+
+=========================================================================================================================================================================================================
+
+The query below returns the nested json by using laravel's eloquent orm:
+
+
+
+
+
+//function in Model_name.php
+public function subdivision(){
+		return $this->hasMany('App\Models\Subdivision','div_id','div_id');       //the second parameter is the foreign key in th Subdivision table,the third is Division's own key
+	}
+
+public function categories(){
+		return $this->hasMany('App\Models\Category','cat_id','cat_id');
+]
+
+//function in controller
+public function api()
+{
+		try{
+
+			
+			$statusCode = 200;
+			$users = division::with(['subdivision'=>function($query){
+				return $query->with('categories')->get();
+			}])->get();
+	          
+
+
+		}catch (Exception $e){
+			$statusCode = 404;
+		}finally{
+			return Response::json($users, $statusCode);
+		}
+	}
+
+
+
+=========================================================================================================================================================================================================
+
+returning nested json using raw queries:
+
+
+
+$obj=DB::select("select distinct(s.story_id),s.title from tags as t left join stories as s on t.entity_id=s.story_id order by s.story_id");
+        $i=0;
+        foreach($obj as $objs)
+        {
+            $res=DB::select("select tags.name from tags where entity_id=:id",array("id"=>$objs->story_id));
+            $json[$i]["story_name"]=$objs->title;
+            $json[$i]["story_id"]=$objs->story_id;
+            $json[$i]['tags']=$res;
+            $i++;
+        }
+        return json_encode($json);
+
+
